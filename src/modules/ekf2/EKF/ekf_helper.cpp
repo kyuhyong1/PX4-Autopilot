@@ -244,7 +244,9 @@ void Ekf::constrainStates()
 	_state.mag_B = matrix::constrain(_state.mag_B, -getMagBiasLimit(), getMagBiasLimit());
 #endif // CONFIG_EKF2_MAGNETOMETER
 
+#if defined(CONFIG_EKF2_WIND)
 	_state.wind_vel = matrix::constrain(_state.wind_vel, -100.0f, 100.0f);
+#endif // CONFIG_EKF2_WIND
 }
 
 #if defined(CONFIG_EKF2_BARO_COMPENSATION)
@@ -370,9 +372,9 @@ void Ekf::getAuxVelInnovVar(float aux_vel_innov_var[2]) const
 #endif // CONFIG_EKF2_AUXVEL
 
 // get the state vector at the delayed time horizon
-matrix::Vector<float, 24> Ekf::getStateAtFusionHorizonAsVector() const
+Ekf::VectorState Ekf::getStateAtFusionHorizonAsVector() const
 {
-	matrix::Vector<float, 24> state;
+	VectorState state;
 	state.slice<State::quat_nominal.dof, 1>(State::quat_nominal.idx, 0) = _state.quat_nominal;
 	state.slice<State::vel.dof, 1>(State::vel.idx, 0) = _state.vel;
 	state.slice<State::pos.dof, 1>(State::pos.idx, 0) = _state.pos;
@@ -380,7 +382,9 @@ matrix::Vector<float, 24> Ekf::getStateAtFusionHorizonAsVector() const
 	state.slice<State::accel_bias.dof, 1>(State::accel_bias.idx, 0) = _state.accel_bias;
 	state.slice<State::mag_I.dof, 1>(State::mag_I.idx, 0) = _state.mag_I;
 	state.slice<State::mag_B.dof, 1>(State::mag_B.idx, 0) = _state.mag_B;
+#if defined(CONFIG_EKF2_WIND)
 	state.slice<State::wind_vel.dof, 1>(State::wind_vel.idx, 0) = _state.wind_vel;
+#endif // CONFIG_EKF2_WIND
 	return state;
 }
 
@@ -826,7 +830,9 @@ void Ekf::fuse(const VectorState &K, float innovation)
 	_state.accel_bias -= K.slice<State::accel_bias.dof, 1>(State::accel_bias.idx, 0) * innovation;
 	_state.mag_I -= K.slice<State::mag_I.dof, 1>(State::mag_I.idx, 0) * innovation;
 	_state.mag_B -= K.slice<State::mag_B.dof, 1>(State::mag_B.idx, 0) * innovation;
+#if defined(CONFIG_EKF2_WIND)
 	_state.wind_vel -= K.slice<State::wind_vel.dof, 1>(State::wind_vel.idx, 0) * innovation;
+#endif // CONFIG_EKF2_WIND
 }
 
 void Ekf::uncorrelateQuatFromOtherStates()
@@ -1052,6 +1058,7 @@ void Ekf::resetGpsDriftCheckFilters()
 	_gps_filtered_horizontal_velocity_m_s = NAN;
 }
 
+#if defined(CONFIG_EKF2_WIND)
 void Ekf::resetWind()
 {
 #if defined(CONFIG_EKF2_AIRSPEED)
@@ -1074,3 +1081,4 @@ void Ekf::resetWindToZero()
 	// start with a small initial uncertainty to improve the initial estimate
 	P.uncorrelateCovarianceSetVariance<State::wind_vel.dof>(State::wind_vel.idx, _params.initial_wind_uncertainty);
 }
+#endif // CONFIG_EKF2_WIND
