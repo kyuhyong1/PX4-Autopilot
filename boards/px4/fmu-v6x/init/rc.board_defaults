@@ -19,3 +19,21 @@ param set-default SENS_EN_INA226 1
 param set-default SYS_USE_IO 1
 
 safety_button start
+
+# Set the ESC outputs to function as motors
+param set MODAL_IO_FUNC1 101
+param set MODAL_IO_FUNC2 103
+param set MODAL_IO_FUNC3 104
+param set MODAL_IO_FUNC4 102
+
+param set MODAL_IO_SDIR1 0
+param set MODAL_IO_SDIR2 0
+param set MODAL_IO_SDIR3 0
+param set MODAL_IO_SDIR4 0
+
+param set MODAL_IO_CONFIG 1
+param set MODAL_IO_REV 0
+param set MODAL_IO_MODE 0
+param set MODAL_IO_BAUD 2000000
+param set MODAL_IO_RPM_MAX 10500
+param set MODAL_IO_RPM_MIN 1000
