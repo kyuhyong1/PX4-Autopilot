@@ -180,6 +180,9 @@ public:
 
 	const Vector3f getFlowGyro() const { return _flow_sample_delayed.gyro_xyz * (1.f / _flow_sample_delayed.dt); }
 	const Vector3f &getFlowGyroIntegral() const { return _flow_sample_delayed.gyro_xyz; }
+	const Vector3f &getFlowGyroBias() const { return _flow_gyro_bias; }
+	const Vector3f &getRefBodyRate() const { return _ref_body_rate; }
+	const Vector3f &getMeasuredBodyRate() const { return _measured_body_rate; }
 #endif // CONFIG_EKF2_OPTICAL_FLOW
 
 #if defined(CONFIG_EKF2_AUXVEL)
@@ -279,9 +282,23 @@ public:
 #endif // CONFIG_EKF2_MAGNETOMETER
 
 #if defined(CONFIG_EKF2_DRAG_FUSION)
-	void getDragInnov(float drag_innov[2]) const { _drag_innov.copyTo(drag_innov); }
-	void getDragInnovVar(float drag_innov_var[2]) const { _drag_innov_var.copyTo(drag_innov_var); }
-	void getDragInnovRatio(float drag_innov_ratio[2]) const { _drag_test_ratio.copyTo(drag_innov_ratio); }
+	const auto &aid_src_drag() const { return _aid_src_drag; }
+
+	void getDragInnov(float drag_innov[2]) const
+	{
+		drag_innov[0] = _aid_src_drag.innovation[0];
+		drag_innov[1] = _aid_src_drag.innovation[1];
+	}
+	void getDragInnovVar(float drag_innov_var[2]) const
+	{
+		drag_innov_var[0] = _aid_src_drag.innovation_variance[0];
+		drag_innov_var[1] = _aid_src_drag.innovation_variance[1];
+	}
+	void getDragInnovRatio(float drag_innov_ratio[2]) const
+	{
+		drag_innov_ratio[0] = _aid_src_drag.test_ratio[0];
+		drag_innov_ratio[1] = _aid_src_drag.test_ratio[1];
+	}
 #endif // CONFIG_EKF2_DRAG_FUSION
 
 #if defined(CONFIG_EKF2_AIRSPEED)
@@ -301,11 +318,13 @@ public:
 	void getGravityInnovRatio(float &grav_innov_ratio) const { grav_innov_ratio = Vector3f(_aid_src_gravity.test_ratio).max(); }
 
 	// get the state vector at the delayed time horizon
-	matrix::Vector<float, State::size> getStateAtFusionHorizonAsVector() const;
+	const matrix::Vector<float, State::size> &getStateAtFusionHorizonAsVector() const { return _state.vector(); }
 
+#if defined(CONFIG_EKF2_WIND)
 	// get the wind velocity in m/s
 	const Vector2f &getWindVelocity() const { return _state.wind_vel; };
 	Vector2f getWindVelocityVariance() const { return getStateVariance<State::wind_vel>(); }
+#endif // CONFIG_EKF2_WIND
 
 	template <const IdxDof &S>
 	matrix::Vector<float, S.dof>getStateVariance() const { return P.slice<S.dof, S.dof>(S.idx, S.idx).diag(); } // calling getStateCovariance().diag() uses more flash space
@@ -582,7 +601,7 @@ private:
 
 	Vector3f _ang_rate_delayed_raw{};	///< uncorrected angular rate vector at fusion time horizon (rad/sec)
 
-	stateSample _state{};		///< state struct of the ekf running at the delayed time horizon
+	StateSample _state{};		///< state struct of the ekf running at the delayed time horizon
 
 	bool _filter_initialised{false};	///< true when the EKF sttes and covariances been initialised
 
@@ -613,14 +632,14 @@ private:
 	float _zgup_delta_ang_dt{0.f};
 
 	Vector2f _accel_lpf_NE{};			///< Low pass filtered horizontal earth frame acceleration (m/sec**2)
+	float _height_rate_lpf{0.0f};
 	float _yaw_delta_ef{0.0f};		///< Recent change in yaw angle measured about the earth frame D axis (rad)
 	float _yaw_rate_lpf_ef{0.0f};		///< Filtered angular rate about earth frame D axis (rad/sec)
 
 	SquareMatrixState P{};	///< state covariance matrix
 
 #if defined(CONFIG_EKF2_DRAG_FUSION)
-	Vector2f _drag_innov{};		///< multirotor drag measurement innovation (m/sec**2)
-	Vector2f _drag_innov_var{};	///< multirotor drag measurement innovation variance ((m/sec**2)**2)
+	estimator_aid_source2d_s _aid_src_drag{};
 #endif // CONFIG_EKF2_DRAG_FUSION
 
 #if defined(CONFIG_EKF2_TERRAIN)
@@ -656,6 +675,8 @@ private:
 	Vector2f _flow_vel_body{};	///< velocity from corrected flow measurement (body frame)(m/s)
 	Vector2f _flow_vel_ne{};		///< velocity from corrected flow measurement (local frame) (m/s)
 	Vector3f _imu_del_ang_of{};	///< bias corrected delta angle measurements accumulated across the same time frame as the optical flow rates (rad)
+	Vector3f _ref_body_rate{};
+	Vector3f _measured_body_rate{};
 
 	float _delta_time_of{0.0f};	///< time in sec that _imu_del_ang_of was accumulated over (sec)
 	uint64_t _time_bad_motion_us{0};	///< last system time that on-ground motion exceeded limits (uSec)
@@ -783,8 +804,6 @@ private:
 	uint64_t _time_good_vert_accel{0};	///< last time a good vertical accel was detected (uSec)
 	uint16_t _clip_counter{0};		///< counter that increments when clipping ad decrements when not
 
-	float _height_rate_lpf{0.0f};
-
 	// initialise filter states of both the delayed ekf and the real time complementary filter
 	bool initialiseFilter(void);
 
@@ -846,9 +865,6 @@ private:
 
 	// Reset the wind states using the current airspeed measurement, ground relative nav velocity, yaw angle and assumption of zero sideslip
 	void resetWindUsingAirspeed(const airspeedSample &airspeed_sample);
-
-	// perform a limited reset of the wind state covariances
-	void resetWindCovarianceUsingAirspeed(const airspeedSample &airspeed_sample);
 #endif // CONFIG_EKF2_AIRSPEED
 
 #if defined(CONFIG_EKF2_SIDESLIP)
@@ -862,7 +878,7 @@ private:
 
 #if defined(CONFIG_EKF2_DRAG_FUSION)
 	// control fusion of multi-rotor drag specific force observations
-	void controlDragFusion();
+	void controlDragFusion(const imuSample &imu_delayed);
 
 	// fuse body frame drag specific forces for multi-rotor wind estimation
 	void fuseDrag(const dragSample &drag_sample);
@@ -1163,9 +1179,11 @@ private:
 
 	void resetMagCov();
 
+#if defined(CONFIG_EKF2_WIND)
 	// perform a reset of the wind states and related covariances
 	void resetWind();
 	void resetWindToZero();
+#endif // CONFIG_EKF2_WIND
 
 	void resetGyroBiasZCov();
 

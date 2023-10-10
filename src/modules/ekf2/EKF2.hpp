@@ -86,7 +86,6 @@
 #include <uORB/topics/vehicle_local_position.h>
 #include <uORB/topics/vehicle_odometry.h>
 #include <uORB/topics/vehicle_status.h>
-#include <uORB/topics/wind.h>
 #include <uORB/topics/yaw_estimator_status.h>
 
 #if defined(CONFIG_EKF2_AIRSPEED)
@@ -114,6 +113,10 @@
 #if defined(CONFIG_EKF2_RANGE_FINDER)
 # include <uORB/topics/distance_sensor.h>
 #endif // CONFIG_EKF2_RANGE_FINDER
+
+#if defined(CONFIG_EKF2_WIND)
+# include <uORB/topics/wind.h>
+#endif // CONFIG_EKF2_WIND
 
 extern pthread_mutex_t ekf2_module_mutex;
 
@@ -196,7 +199,6 @@ private:
 	void PublishInnovationVariances(const hrt_abstime &timestamp);
 	void PublishLocalPosition(const hrt_abstime &timestamp);
 	void PublishOdometry(const hrt_abstime &timestamp, const imuSample &imu_sample);
-	void PublishOdometryAligned(const hrt_abstime &timestamp, const vehicle_odometry_s &ev_odom);
 #if defined(CONFIG_EKF2_OPTICAL_FLOW)
 	void PublishOpticalFlowVel(const hrt_abstime &timestamp);
 #endif // CONFIG_EKF2_OPTICAL_FLOW
@@ -204,7 +206,9 @@ private:
 	void PublishStates(const hrt_abstime &timestamp);
 	void PublishStatus(const hrt_abstime &timestamp);
 	void PublishStatusFlags(const hrt_abstime &timestamp);
+#if defined(CONFIG_EKF2_WIND)
 	void PublishWindEstimate(const hrt_abstime &timestamp);
+#endif // CONFIG_EKF2_WIND
 	void PublishYawEstimatorStatus(const hrt_abstime &timestamp);
 
 #if defined(CONFIG_EKF2_AIRSPEED)
@@ -404,6 +408,11 @@ private:
 	uORB::PublicationMulti<estimator_aid_source1d_s> _estimator_aid_src_baro_hgt_pub {ORB_ID(estimator_aid_src_baro_hgt)};
 #endif // CONFIG_EKF2_BAROMETER
 
+#if defined(CONFIG_EKF2_DRAG_FUSION)
+	uORB::PublicationMulti<estimator_aid_source2d_s> _estimator_aid_src_drag_pub {ORB_ID(estimator_aid_src_drag)};
+	hrt_abstime _status_drag_pub_last{0};
+#endif // CONFIG_EKF2_DRAG_FUSION
+
 	float _last_gnss_hgt_bias_published{};
 
 #if defined(CONFIG_EKF2_AIRSPEED)
@@ -497,8 +506,10 @@ private:
 	uORB::PublicationMulti<vehicle_local_position_s>     _local_position_pub;
 	uORB::PublicationMulti<vehicle_global_position_s>    _global_position_pub;
 	uORB::PublicationMulti<vehicle_odometry_s>           _odometry_pub;
-	uORB::PublicationMulti<wind_s>              _wind_pub;
 
+#if defined(CONFIG_EKF2_WIND)
+	uORB::PublicationMulti<wind_s>              _wind_pub;
+#endif // CONFIG_EKF2_WIND
 
 	PreFlightChecker _preflt_checker;
 
@@ -528,8 +539,10 @@ private:
 		_param_ekf2_gyr_b_noise,	///< process noise for IMU rate gyro bias prediction (rad/sec**2)
 		(ParamExtFloat<px4::params::EKF2_ACC_B_NOISE>)
 		_param_ekf2_acc_b_noise,///< process noise for IMU accelerometer bias prediction (m/sec**3)
-		(ParamExtFloat<px4::params::EKF2_WIND_NSD>)
-		_param_ekf2_wind_nsd,	///< process noise spectral density for wind velocity prediction (m/sec**2/sqrt(Hz))
+
+#if defined(CONFIG_EKF2_WIND)
+		(ParamExtFloat<px4::params::EKF2_WIND_NSD>) _param_ekf2_wind_nsd,
+#endif // CONFIG_EKF2_WIND
 
 		(ParamExtFloat<px4::params::EKF2_GPS_V_NOISE>)
 		_param_ekf2_gps_v_noise,	///< minimum allowed observation noise for gps velocity fusion (m/sec)

@@ -397,7 +397,6 @@ protected:
 #if defined(CONFIG_EKF2_DRAG_FUSION)
 	RingBuffer<dragSample> *_drag_buffer{nullptr};
 	dragSample _drag_down_sampled{};	// down sampled drag specific force data (filter prediction rate -> observation rate)
-	Vector2f _drag_test_ratio{};		// drag innovation consistency check ratio
 #endif // CONFIG_EKF2_DRAG_FUSION
 
 	innovation_fault_status_u _innov_check_fail_status{};
@@ -453,12 +452,15 @@ protected:
 
 	uint64_t _wmm_gps_time_last_checked{0};  // time WMM last checked
 	uint64_t _wmm_gps_time_last_set{0};      // time WMM last set
+
+#if defined(CONFIG_EKF2_MAGNETOMETER)
 	float _mag_declination_gps{NAN};         // magnetic declination returned by the geo library using the last valid GPS position (rad)
 	float _mag_inclination_gps{NAN};	  // magnetic inclination returned by the geo library using the last valid GPS position (rad)
 	float _mag_strength_gps{NAN};	          // magnetic strength returned by the geo library using the last valid GPS position (T)
 
 	float _mag_inclination{NAN};
 	float _mag_strength{NAN};
+#endif // CONFIG_EKF2_MAGNETOMETER
 
 	// this is the current status of the filter control modes
 	filter_control_status_u _control_status{};

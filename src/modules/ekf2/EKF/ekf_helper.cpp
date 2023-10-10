@@ -239,8 +239,8 @@ void Ekf::constrainStates()
 	const float accel_bias_limit = getAccelBiasLimit();
 	_state.accel_bias = matrix::constrain(_state.accel_bias, -accel_bias_limit, accel_bias_limit);
 
-	_state.mag_I = matrix::constrain(_state.mag_I, -1.0f, 1.0f);
 #if defined(CONFIG_EKF2_MAGNETOMETER)
+	_state.mag_I = matrix::constrain(_state.mag_I, -1.0f, 1.0f);
 	_state.mag_B = matrix::constrain(_state.mag_B, -getMagBiasLimit(), getMagBiasLimit());
 #endif // CONFIG_EKF2_MAGNETOMETER
 
@@ -369,21 +369,6 @@ void Ekf::getAuxVelInnovVar(float aux_vel_innov_var[2]) const
 }
 #endif // CONFIG_EKF2_AUXVEL
 
-// get the state vector at the delayed time horizon
-matrix::Vector<float, 24> Ekf::getStateAtFusionHorizonAsVector() const
-{
-	matrix::Vector<float, 24> state;
-	state.slice<State::quat_nominal.dof, 1>(State::quat_nominal.idx, 0) = _state.quat_nominal;
-	state.slice<State::vel.dof, 1>(State::vel.idx, 0) = _state.vel;
-	state.slice<State::pos.dof, 1>(State::pos.idx, 0) = _state.pos;
-	state.slice<State::gyro_bias.dof, 1>(State::gyro_bias.idx, 0) = _state.gyro_bias;
-	state.slice<State::accel_bias.dof, 1>(State::accel_bias.idx, 0) = _state.accel_bias;
-	state.slice<State::mag_I.dof, 1>(State::mag_I.idx, 0) = _state.mag_I;
-	state.slice<State::mag_B.dof, 1>(State::mag_B.idx, 0) = _state.mag_B;
-	state.slice<State::wind_vel.dof, 1>(State::wind_vel.idx, 0) = _state.wind_vel;
-	return state;
-}
-
 bool Ekf::getEkfGlobalOrigin(uint64_t &origin_time, double &latitude, double &longitude, float &origin_alt) const
 {
 	origin_time = _pos_ref.getProjectionReferenceTimestamp();
@@ -416,6 +401,7 @@ bool Ekf::setEkfGlobalOrigin(const double latitude, const double longitude, cons
 		_pos_ref.initReference(latitude, longitude, _time_delayed_us);
 		_gps_alt_ref = altitude;
 
+#if defined(CONFIG_EKF2_MAGNETOMETER)
 		const float mag_declination_gps = get_mag_declination_radians(latitude, longitude);
 		const float mag_inclination_gps = get_mag_inclination_radians(latitude, longitude);
 		const float mag_strength_gps = get_mag_strength_gauss(latitude, longitude);
@@ -427,6 +413,7 @@ bool Ekf::setEkfGlobalOrigin(const double latitude, const double longitude, cons
 
 			_wmm_gps_time_last_set = _time_delayed_us;
 		}
+#endif // CONFIG_EKF2_MAGNETOMETER
 
 		// We don't know the uncertainty of the origin
 		_gpos_origin_eph = 0.f;
@@ -824,8 +811,12 @@ void Ekf::fuse(const VectorState &K, float innovation)
 	_state.pos -= K.slice<State::pos.dof, 1>(State::pos.idx, 0) * innovation;
 	_state.gyro_bias -= K.slice<State::gyro_bias.dof, 1>(State::gyro_bias.idx, 0) * innovation;
 	_state.accel_bias -= K.slice<State::accel_bias.dof, 1>(State::accel_bias.idx, 0) * innovation;
+
+#if defined(CONFIG_EKF2_MAGNETOMETER)
 	_state.mag_I -= K.slice<State::mag_I.dof, 1>(State::mag_I.idx, 0) * innovation;
 	_state.mag_B -= K.slice<State::mag_B.dof, 1>(State::mag_B.idx, 0) * innovation;
+#endif // CONFIG_EKF2_MAGNETOMETER
+
 	_state.wind_vel -= K.slice<State::wind_vel.dof, 1>(State::wind_vel.idx, 0) * innovation;
 }
 
@@ -907,7 +898,7 @@ void Ekf::updateVerticalDeadReckoningStatus()
 Vector3f Ekf::calcRotVecVariances() const
 {
 	Vector3f rot_var;
-	sym::QuatVarToRotVar(getStateAtFusionHorizonAsVector(), P, FLT_EPSILON, &rot_var);
+	sym::QuatVarToRotVar(_state.vector(), P, FLT_EPSILON, &rot_var);
 	return rot_var;
 }
 
@@ -1052,6 +1043,7 @@ void Ekf::resetGpsDriftCheckFilters()
 	_gps_filtered_horizontal_velocity_m_s = NAN;
 }
 
+#if defined(CONFIG_EKF2_WIND)
 void Ekf::resetWind()
 {
 #if defined(CONFIG_EKF2_AIRSPEED)
@@ -1074,3 +1066,4 @@ void Ekf::resetWindToZero()
 	// start with a small initial uncertainty to improve the initial estimate
 	P.uncorrelateCovarianceSetVariance<State::wind_vel.dof>(State::wind_vel.idx, _params.initial_wind_uncertainty);
 }
+#endif // CONFIG_EKF2_WIND

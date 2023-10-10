@@ -57,14 +57,18 @@ void Ekf::reset()
 {
 	ECL_INFO("reset");
 
+	_state.quat_nominal.setIdentity();
 	_state.vel.setZero();
 	_state.pos.setZero();
 	_state.gyro_bias.setZero();
 	_state.accel_bias.setZero();
+
+#if defined(CONFIG_EKF2_MAGNETOMETER)
 	_state.mag_I.setZero();
 	_state.mag_B.setZero();
+#endif // CONFIG_EKF2_MAGNETOMETER
+
 	_state.wind_vel.setZero();
-	_state.quat_nominal.setIdentity();
 
 #if defined(CONFIG_EKF2_RANGE_FINDER)
 	_range_sensor.setPitchOffset(_params.rng_sens_pitch);
@@ -324,4 +328,8 @@ void Ekf::predictState(const imuSample &imu_delayed)
 	// Calculate filtered yaw rate to be used by the magnetometer fusion type selection logic
 	// Note fixed coefficients are used to save operations. The exact time constant is not important.
 	_yaw_rate_lpf_ef = 0.95f * _yaw_rate_lpf_ef + 0.05f * spin_del_ang_D / imu_delayed.delta_ang_dt;
+
+	// Calculate low pass filtered height rate
+	float alpha_height_rate_lpf = 0.1f * imu_delayed.delta_vel_dt; // 10 seconds time constant
+	_height_rate_lpf = _height_rate_lpf * (1.0f - alpha_height_rate_lpf) + _state.vel(2) * alpha_height_rate_lpf;
 }
