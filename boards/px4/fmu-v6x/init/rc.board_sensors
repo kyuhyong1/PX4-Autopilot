@@ -141,6 +141,8 @@ else
 	bmp388 -X start
 fi
 
+uxrce_dds_client start -t serial -d /dev/ttyS3 -b 921600
+
 # Baro on I2C3
 ms5611 -X start
 
